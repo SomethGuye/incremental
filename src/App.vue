@@ -66,16 +66,13 @@ const baseMPS = computed(()=>{
 	let tickmul = g.tick.mul(0.25).plus(2);
 	return g.ads[1].mul(tickmul.pow(g.adps[1]))
 })
-const secondSoftcap = computed(()=>{
-	return (((baseMPS.gt(1e50))?E(50).div(baseMPS.log10()):E(1)).mul(1/3))
-})
 function persec(n) {
 	let tickmul = g.tick.mul(0.25).plus(2);
 	let base = g.ads[n+1].mul(tickmul.pow(g.adps[n+1]));
 	if(n !== 0) return base;
 	if(base.gt(1e20))
 		base = base.pow(
-			(E(20).div(base.log10())).pow(secondSoftcap)
+			(E(20).div(base.log10())).pow(0.5)
 		);
 	return base;
 }
@@ -111,7 +108,7 @@ function buytick() {
 	return false;
 }
 function scinot(x, p){
-	return x.toPrecision(p)
+	return x.toPrecision(p).replace('+', '')
 }
 function notate(x, p=2){
 	if (g.notation=='sci') return scinot(x,p+1)
@@ -238,10 +235,7 @@ function notate(x, p=2){
 			</table>
 			<br />
 			<div v-if="baseMPS.gt(1e20)">
-				Above 1e20 manifolds, manifold production is raised to the power of {{ notate((E(20).div(baseMPS.log10())).pow(secondSoftcap), 4) }}
-			</div>
-			<div v-if="baseMPS.gt(1e50)">
-				Above 1e50 manifolds, the first softcap is raised to the power of {{ notate(secondSoftcap.div(0.5)) }}
+				Above 1e20 manifolds per second, manifold production is raised to the power of {{ notate((E(20).div(baseMPS.log10())).pow(0.5), 4) }}
 			</div>
 		</div>
 		<br /> 
