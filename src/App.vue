@@ -66,7 +66,7 @@ const baseMPS = computed(()=>{
 	let tickmul = g.tick.mul(0.25).plus(2);
 	return g.ads[1].mul(tickmul.pow(g.adps[1]))
 })
-const secondSoftcap = computer(()=>{
+const secondSoftcap = computed(()=>{
 	return (((baseMPS.gt(1e50))?E(50).div(baseMPS.log10()):E(1)).mul(1/3))
 })
 function persec(n) {
