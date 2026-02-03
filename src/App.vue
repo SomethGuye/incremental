@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import Decimal from './break_eternity.min.js'
 let D = Decimal;
 let E = D.fromNumber;
@@ -16,11 +16,11 @@ const g = reactive({
 	],
 	adcms: [ // cost multipliers
 		null,
-		E(10),E(1e3),E(1e5),E(1e8),
+		E(10),E(1e3),E(1e6),E(1e9),
 	],
 	adics: [ // initial costs
 		null,
-		E(1),E(1e3),E(1e4),E(1e6),
+		E(1),E(1e3),E(1e5),E(1e7),
 	],
 	tick: E(0), // amount of theorems
 	prestige: {
@@ -62,15 +62,20 @@ function loadGame(){
 function saveGame(){
 	return localStorage.setItem("save", btoa(JSON.stringify(g)));
 }
+const baseMPS = computed(()=>{
+	let tickmul = g.tick.mul(0.25).plus(2);
+	return g.ads[1].mul(tickmul.pow(g.adps[1]))
+})
+const secondSoftcap = computer(()=>{
+	return (((baseMPS.gt(1e50))?E(50).div(baseMPS.log10()):E(1)).mul(1/3))
+})
 function persec(n) {
 	let tickmul = g.tick.mul(0.25).plus(2);
 	let base = g.ads[n+1].mul(tickmul.pow(g.adps[n+1]));
 	if(n !== 0) return base;
-	if(g.a.gt(1e20))
+	if(base.gt(1e20))
 		base = base.pow(
-			(E(20).div(g.a.log10())).pow( // base softcap
-				g.a.gt(1e50)?g.a.log10().sub(50):E(1) //second softcap (powers first)
-			)
+			(E(20).div(base.log10())).pow(secondSoftcap)
 		);
 	return base;
 }
@@ -78,7 +83,7 @@ function dimcost(n, q=g.adps[n]){
 	return g.adcms[n].pow(q).mul(g.adics[n]);
 }
 function tickcost(q=g.tick){
-	return E(10).pow(q.pow(1.1).mul(2).floor()).mul(100);
+	return E(10).pow(q.pow(1.3).mul(2).floor()).mul(100);
 }
 function delSave(){
 	localStorage.removeItem("save");
@@ -108,7 +113,7 @@ function buytick() {
 function scinot(x, p){
 	return x.toPrecision(p)
 }
-function notate(x, p=3){
+function notate(x, p=2){
 	if (g.notation=='sci') return scinot(x,p+1)
 	else return 'no notation'
 }
@@ -158,6 +163,7 @@ function notate(x, p=3){
 				<button @click="tab = 'dim'" style="background-color: #933;">Structures</button>
 				<button @click="tab = 'opt'" style="background-color: #ccc;">Options</button>
 			</div>
+			<!--button v-if="g.tick"></button-->
 		</div>
 		<div v-if="tab==='dim'">
 			<div class="center">
@@ -231,13 +237,11 @@ function notate(x, p=3){
 				</tr>
 			</table>
 			<br />
-			<div v-if="g.a.gt(1e20)">
-				Above 1e20 manifolds, manifold production is raised to the power of {{ notate((E(20).div(g.a.log10())).pow((g.a.gt(1e50))?g.a.log10().sub(50):E(1)), 4) }}
-
+			<div v-if="baseMPS.gt(1e20)">
+				Above 1e20 manifolds, manifold production is raised to the power of {{ notate((E(20).div(baseMPS.log10())).pow(secondSoftcap), 4) }}
 			</div>
-			<div v-if="g.a.gt(1e50)">
-				Above 1e50 manifolds, manifold softcap is raised to the power of {{ notate(g.a.log10().sub(50)) }}
-
+			<div v-if="baseMPS.gt(1e50)">
+				Above 1e50 manifolds, the first softcap is raised to the power of {{ notate(secondSoftcap.div(0.5)) }}
 			</div>
 		</div>
 		<br /> 
