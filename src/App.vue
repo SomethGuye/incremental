@@ -16,16 +16,23 @@ const g = reactive({
 	],
 	adcms: [ // cost multipliers
 		null,
-		E(10),E(1e3),E(1e6),E(1e9),
+		E(10),E(1e3),E(1e7),E(1e11),
 	],
 	adics: [ // initial costs
 		null,
-		E(1),E(1e3),E(1e5),E(1e7),
+		E(1),E(100),E(1e5),E(1e7),
 	],
 	tick: E(0), // amount of theorems
 	prestige: {
 		points: E(0),
-		times: E(0)
+		times: E(0),
+		upgs: [
+			null,
+			false,false,
+			false,false,
+			false,false,
+			false,false,
+		]
 	},
 	notation: 'sci',
 });
@@ -38,25 +45,25 @@ onMounted(()=>{
 	} else {
 		loadGame();
 	}
-	setInterval(()=>{
-		g.a      = g.a     .plus(persec(0).mul(dTime));
-		g.ads[1] = g.ads[1].plus(persec(1).mul(dTime));
-		g.ads[2] = g.ads[2].plus(persec(2).mul(dTime));
-		g.ads[3] = g.ads[3].plus(persec(3).mul(dTime));
-	}, dTime * 1000);
+	setInterval(gameTick, dTime * 1000);
 	saveloop = setInterval(()=>{
 		saveGame();
 	}, 15_000);
 	}
 );
+
+function gameTick(t=dTime){
+	g.a      = g.a     .plus(persec(0).mul(t));
+	g.ads[1] = g.ads[1].plus(persec(1).mul(t));
+	g.ads[2] = g.ads[2].plus(persec(2).mul(t));
+	g.ads[3] = g.ads[3].plus(persec(3).mul(t));
+}
 function loadGame(){
 	let q = JSON.parse(atob(localStorage.getItem("save")));
 	g.a = F(q.a);
 	g.tick = F(q.tick)
 	for (let i = 1; i <= 4; i++) g.ads[i] = F(q.ads[i]);
 	for (let i = 1; i <= 4; i++) g.adps[i] = F(q.adps[i]);
-	for (let i = 1; i <= 4; i++) g.adcms[i] = F(q.adcms[i]);
-	for (let i = 1; i <= 4; i++) g.adics[i] = F(q.adics[i]);
 	g.not = q.not;
 }
 function saveGame(){
@@ -64,11 +71,11 @@ function saveGame(){
 }
 const baseMPS = computed(()=>{
 	let tickmul = g.tick.mul(0.25).plus(2);
-	return g.ads[1].mul(tickmul.pow(g.adps[1]))
+	return g.ads[1].mul(tickmul.pow(g.adps[1])).div(8);
 })
 function persec(n) {
 	let tickmul = g.tick.mul(0.25).plus(2);
-	let base = g.ads[n+1].mul(tickmul.pow(g.adps[n+1]));
+	let base = g.ads[n+1].mul(tickmul.pow(g.adps[n+1])).div(n===0?1:8);
 	if(n !== 0) return base;
 	if(base.gt(1e20))
 		base = base.pow(
@@ -106,6 +113,24 @@ function buytick() {
 		return true;
 	}
 	return false;
+}
+function pendingPoints(){
+	if(!g.prestige.upgs[8]) return 1;
+	else return g.tick.sub(5)
+}
+function prestige(){
+	g.prestige.points = g.prestige.points.add(g.tick.sub(5));
+	g.prestige.times = g.prestige.times.add(1);
+	g.a = E(1);
+	g.tick = E(0)
+	for (let i = 1; i <= 4; i++) g.ads[i] = E(0);
+	for (let i = 1; i <= 4; i++) g.adps[i] = E(0);
+}
+function buyPUpgrade(n){
+	if(( g.prestige.upgs[n-2] || n <= 2 )&&( n !== 8 || g.prestige.upgs.findIndex((x)=>!x) === 7)) {
+		g.prestige.upgs[n] = true; // Truth nuke
+		g.prestige.points = g.prestige.points.sub(Math.floor(n/2+1))
+	}
 }
 function scinot(x, p){
 	return x.toPrecision(p).replace('+', '')
@@ -155,12 +180,14 @@ function notate(x, p=2){
 	<div>
 		<div class="center stack">
 			<h1>You have <span style="color: #f00; font-size:72px;">{{ notate(g.a) }}</span> manifolds. (+{{notate(persec(0))}}/s)</h1>
+			<div v-if="g.prestige.times > 0">You have <span style="color: #00f;">{{ notate(g.prestige.points) }}</span> prestige points.</div>
 			<br />
 			<div>
 				<button @click="tab = 'dim'" style="background-color: #933;">Structures</button>
 				<button @click="tab = 'opt'" style="background-color: #ccc;">Options</button>
+				<button @click="tab = 'pre'" style="background-color: #33f;">Prestige</button>
 			</div>
-			<!--button v-if="g.tick"></button-->
+			<button v-if="g.tick.gt(6)" @click='prestige' style="background-color: blue;">Prestige for {{ notate(pendingPoints()) }} point{{pendingPoints!==1?'s':''}}!</button>
 		</div>
 		<div v-if="tab==='dim'">
 			<div class="center">
@@ -240,19 +267,64 @@ function notate(x, p=2){
 		</div>
 		<br /> 
 		<div v-if="tab==='opt'">
-			<table class="center">
+			<div class="center">
+				<table>
+					<tr>
+						<td>
+							<button @click="delSave" style="background-color: #f33;">
+								Delete save
+							</button>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<button @click="saveGame">
+								save game for debug
+							</button>
+						</td>
+					</tr>
+				</table>
+				{{ JSON.stringify(g,1) }}
+			</div>
+		</div>
+		<br />
+		<div v-if="tab==='pre'">
+			You have <span style="color: #00f">{{ g.prestige.points }}</span> prestige points.
+			<br />
+			Each upgrade costs 1 prestige point.
+			<br />
+			By the way this is not yet implemented :(
+			<table>
 				<tr>
 					<td>
-						<button @click="delSave" style="background-color: #f33;">
-							Delete save
-						</button>
+						<button :disabled="true" @click="buyPUpgrade(1)">Upgrade 1: Double all generator mults</button>
+					</td>
+					<td>
+						<button :disabled="true" @click="buyPUpgrade(2)">Upgrade 2: Weaken manifold softcap by 5% (50% =&gt; 45%)</button>
 					</td>
 				</tr>
 				<tr>
 					<td>
-						<button @click="saveGame">
-							save game for debug
-						</button>
+						<button :disabled="!g.prestige.upgs[1]" @click="buyPUpgrade(3)">Upgrade 3: Double all generator mults</button>
+					</td>
+					<td>
+						<button :disabled="!g.prestige.upgs[2]" @click="buyPUpgrade(4)">Upgrade 4: Weaken manifold softcap by 5% (50% =&gt; 45%)</button>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<button :disabled="!g.prestige.upgs[3]" @click="buyPUpgrade(5)">Upgrade 5: Double all generator mults</button>
+					</td>
+					<td>
+						<button :disabled="!g.prestige.upgs[4]" @click="buyPUpgrade(6)">Upgrade 6: Weaken manifold softcap by 5% (50% =&gt; 45%)</button>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<button :disabled="!g.prestige.upgs[5]" @click="buyPUpgrade(7)">Upgrade 7: Start with some manifolds after prestige</button>
+					</td>
+					<td>
+						<button :disabled="!g.prestige.upgs[6]" @click="buyPUpgrade(8)">Upgrade 8: You can get more than 1 prestige point per reset</button>
 					</td>
 				</tr>
 			</table>
